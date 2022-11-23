@@ -36,7 +36,19 @@ def rmtree(top):
             os.remove(filename)
         for name in dirs:
             os.rmdir(os.path.join(root, name))
-    os.rmdir(top)    
+    try:
+        os.rmdir(top)
+    except FileNotFoundError:
+        print("Stage already empty")
+
+
+def change_permission(path):
+    for root, dirs, files in os.walk(path, topdown=False):
+        for name in files:
+            filename = os.path.join(root, name)
+            os.chmod(filename, stat.S_IWRITE)
+        
+
 
 def get_config():
     lines = []
@@ -68,7 +80,7 @@ def clone(repo_name,path_to,final_destination):
     # Get repo
     # NOTE: path_to needs to be empty
     try:
-        shutil.rmtree(path_to, ignore_errors=True)
+        rmtree(path_to)
     except FileNotFoundError:
         print("Stage already empty")
     # Proxy works for this
@@ -81,16 +93,20 @@ def clone(repo_name,path_to,final_destination):
     for root,dirs,files in os.walk(path_to, topdown=True):
         for file in files:
             if file.endswith(".cs"):
-                with open(os.path.join(root,file), "r+", encoding="utf8") as f:
+                with open(os.path.join(root,file), "rb+") as f:
                     content = f.read()
                     f.seek(0,0)
-                    f.write(license + "\n\n" + content)
+                    new_content = (license + "\n\n" + format(content)).encode()
+                    f.write(new_content)
 
-    shutil.rmtree(final_destination, ignore_errors=True)
-    shutil.move(path_to, final_destination, copy_function=shutil.copytree)
+    rmtree(final_destination)
+    change_permission(path_to)
+    shutil.move(path_to, final_destination)#, copy_function=shutil.copytree)
 
 if __name__ == '__main__':
     get_config()
+
     for i in range(len(repo_names)):
         clone(repo_names[i],staging_spots[i],final_spots[i])
+
     print("DONE")
