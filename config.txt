@@ -1,5 +1,3 @@
-D:/test/stage D:/test/final zip.zip
-one  four seven 
-eleven nine fourteen
-
-twenty one zero
+uts2018 D:/repos/test1 C:/Temp/network1
+MODIS2015 D:/repos/test2 C:/Temp/network2
+FEI.Utils D:/repos/test3 C:/Temp/network3
