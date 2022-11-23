@@ -17,13 +17,6 @@ bitbucket._session.proxies = {'http':proxy_setting,'https':proxy_setting}
 username="dylanrsmith"
 password="ATBB8QqnhrB3vr8k8aMvq4hrJdUy56EB4A95"
 repo = git.Repo
-
-repo_name = "uts2018"
-#git_link = f"https://{username}:{password}@bitbucket.org/fargoengineeringinc/{repo_name}.git"
-path_to = "D:\repos\~test"                                                                        # Path to initially download repo
-final_destination = "C:\Temp"                                                                      # End location to post repo
-project_key = "FEI"
-
 repo_names = []
 staging_spots = []
 final_spots = []
@@ -39,7 +32,7 @@ def rmtree(top):
     try:
         os.rmdir(top)
     except FileNotFoundError:
-        print("Stage already empty")
+        pass
 
 
 def change_permission(path):
@@ -101,8 +94,9 @@ def clone(repo_name,path_to,final_destination):
 
     rmtree(final_destination)
     change_permission(path_to)
-    shutil.move(path_to, final_destination)#, copy_function=shutil.copytree)
+    shutil.move(path_to, final_destination)
 
+# Main Function
 if __name__ == '__main__':
     get_config()
 
