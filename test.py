@@ -34,7 +34,7 @@ def get_config():
         options = [word for word in line.split()]
 
     for option in options:
-        count+=1
+        count += 1
         if count == 1:
             repo_names.append(option)
         elif count == 2:
@@ -68,6 +68,8 @@ def get_files():
                 f.seek(0, 0)
                 # f.write(line.rstrip("\r\n") + "\n" + content)                           # line is content to write
                 f.write("LICENSE#32039805948" + "\n" + content)
+
+
 def write_license():
     files_arr = []
     for root, dirs, files in os.walk("D:/repos/~test", topdown=False):

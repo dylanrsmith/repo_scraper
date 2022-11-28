@@ -1,4 +1,4 @@
-uts2018 D:/repos/test1 C:/Temp/uts2018
-MODIS2015 D:/repos/test2 C:/Temp/MODIS2015
-FEI.Utils D:/repos/test3 C:/Temp/FEI.Utils
-SSISImportRoutines D:/repos/test4 C:/Temp/SSISImportRoutines
+uts2018 C:/Temp/temp D:/repos/uts2018
+MODIS2015 C:/Temp/temp D:/repos/MODIS2015
+FEI.Utils C:/Temp/temp D:/repos/FEI.Utils
+SSISImportRoutines C:/Temp/temp D:/repos/SSISImportRoutines
