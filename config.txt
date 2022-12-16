@@ -1,4 +1,3 @@
-uts2018 C:/Temp/temp D:/repos/uts2018
-MODIS2015 C:/Temp/temp D:/repos/MODIS2015
-FEI.Utils C:/Temp/temp D:/repos/FEI.Utils
-SSISImportRoutines C:/Temp/temp D:/repos/SSISImportRoutines
+uts2018 C:/Temp/temp \\s1cn1faras14\SharedData\Temp\test\repo
+
+

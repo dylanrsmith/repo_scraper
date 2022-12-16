@@ -1,9 +1,15 @@
+'''
+    Still need to try to only overwrite repos in final destination,
+    IF AND ONLY IF they are older than the newly cloned repo.
+'''
+
 import os
 import git
 import stat
 import shutil
 from datetime import datetime
 from atlassian import Bitbucket
+
 
 # Bitbucket-python
 # TODO read these config variables from a config file
@@ -22,7 +28,7 @@ bitbucket._session.proxies = {"http": proxy_setting1, "https": proxy_setting2}
 # python-git
 username = "dylanrsmith"
 password = "ATBB8QqnhrB3vr8k8aMvq4hrJdUy56EB4A95"
-repo = git.Repo
+repo = git.Repo()
 repo_names = []
 staging_spots = []
 final_spots = []
@@ -81,12 +87,13 @@ def clone(repo_name, path_to, final_destination):
     # Delete directory if it exists
     try:
         rmtree(path_to)
+        rmtree(final_destination)
     except FileNotFoundError:
         print("Stage already empty")
     # Proxy works for this
     # NOTE repo_name must belong to fargoengineeringinc workspace
     git_link = f"https://{username}:{password}@bitbucket.org/fargoengineeringinc/{repo_name}.git"
-    repo.clone_from(
+    cloned_repo = repo.clone_from(
         git_link, path_to, config="http.proxy=farft01:fardnc01@proxy-us.cnhind.com:8080"
     )
 
@@ -99,7 +106,8 @@ def clone(repo_name, path_to, final_destination):
                 with open(os.path.join(root, file), "rb+") as f:
                     content = f.read()
                     f.seek(0, 0)
-                    new_content = (license + "\n\n" + format(content)).encode()
+                    new_content = (license + "\n\n" + format(content)).encode('utf8')
+                    #new_content = (license + "\n\n" + content)
                     f.write(new_content)
 
     rmtree(final_destination)
@@ -120,5 +128,4 @@ if __name__ == "__main__":
 
     end = datetime.now()
     time = end - start
-    print("DONE")
-    print(time)
+    print("DONE @ " + str(time))
