@@ -1,7 +1,6 @@
-// !LICENSE!
-//
-// Eiusmod nisi aliqua non ut tempor do tempor cillum Lorem consequat minim pariatur. 
-// Voluptate adipisicing ad magna magna sint velit cupidatat.
-// Lorem in sunt consectetur laboris.
-//
-// Make sure to select proper plant location in App.config!
+// Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+// Duis a elit nisl. Morbi sagittis augue eget tempor tristique. 
+// Vestibulum fringilla egestas tincidunt. Cras vehicula nibh dui. 
+// Etiam hendrerit nunc ac dui lacinia sollicitudin. Nunc id sagittis quam. 
+// Aliquam volutpat viverra urna non sollicitudin. Integer in augue vitae lacus congue cursus. 
+// Proin augue lectus, sodales sodales quam sit amet, dignissim dictum mi. 

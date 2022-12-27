@@ -98,16 +98,16 @@ def clone(repo_name, path_to, final_destination):
     )
 
     # Append license to correct files
-    with open("license.txt", "r+") as l:
+    with open("license.txt", "r") as l:
         license = l.read()
     for root, dirs, files in os.walk(path_to, topdown=True):
         for file in files:
             if file.endswith(".cs"):
-                with open(os.path.join(root, file), "rb+") as f:
+                with open(os.path.join(root, file), "r", encoding='utf-8-sig') as f:     
                     content = f.read()
+                with open(os.path.join(root, file), "wb") as f:     
                     f.seek(0, 0)
-                    new_content = (license + "\n\n" + format(content)).encode('utf8')
-                    #new_content = (license + "\n\n" + content)
+                    new_content = (license + "\n\n" + format(content)).encode('utf-8')
                     f.write(new_content)
 
     rmtree(final_destination)
