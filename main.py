@@ -1,7 +1,7 @@
-'''
+"""
     Still need to try to only overwrite repos in final destination,
     IF AND ONLY IF they are older than the newly cloned repo.
-'''
+"""
 import os
 import git
 import stat
@@ -101,14 +101,14 @@ def clone(repo_name, path_to, final_destination):
     for root, dirs, files in os.walk(path_to, topdown=True):
         for file in files:
             if file.endswith(".cs"):
-                with open(os.path.join(root, file), "r", encoding='utf-8-sig') as f:     
+                with open(os.path.join(root, file), "r", encoding="utf-8-sig") as f:
                     try:
                         content = f.read()
                     except UnicodeDecodeError:
                         continue
-                with open(os.path.join(root, file), "wb") as f:     
+                with open(os.path.join(root, file), "wb") as f:
                     f.seek(0, 0)
-                    new_content = (license + "\n\n" + format(content)).encode('utf-8')
+                    new_content = (license + "\n\n" + format(content)).encode("utf-8")
                     f.write(new_content)
 
     rmtree(final_destination)
