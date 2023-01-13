@@ -1,89 +1,132 @@
+'''
+    Still need to try to only overwrite repos in final destination,
+    IF AND ONLY IF they are older than the newly cloned repo.
+'''
 import os
 import git
+import stat
 import shutil
+from datetime import datetime
 from atlassian import Bitbucket
 
+# Bitbucket-python
+# TODO read these config variables from a config file
+proxy_setting1 = "http://farft01:fardnc01@proxy-us.cnhind.com:8080"
+proxy_setting2 = "https://farft01:fardnc01@proxy-us.cnhind.com:8080"
+basic_auth = ("dylanrsmith", "ATBB8QqnhrB3vr8k8aMvq4hrJdUy56EB4A95")
 bitbucket = Bitbucket(
     url="http://localhost:7990",
     username="dylanrsmith",
     password="ATBB8QqnhrB3vr8k8aMvq4hrJdUy56EB4A95",
 )
-repo = git.Repo
-
-git_link = "https://dylanrsmith@bitbucket.org/dylanrsmith/paho.git"  # Git link to clone repo from
-path_to = "D:/repos/~test"  # Path to initially download repo
-new_path = "D:/network-test"  # End location to post repo
-project_key = "FEI"
-repo_list = bitbucket.repo_list(project_key, limit=25)
-
-# Function to prepend line to file:
-def line_prepender(filename, line):
-    """
-    filename [string]: file to be edited
-    line [string]: content to be added
-
-    need to filter by file type
-    only prepend to .cs and .h
-    """
-    for file in os.listdir(path_to):
-        if file.endswith(".py") or file.endswith(".txt"):  # Filter by file type
-
-            # with open(filename, "r+") as f:                                             # Open file and write text
-            with open(file, "r+") as f:
-                content = f.read()
-                f.seek(0, 0)
-                f.write(line.rstrip("\r\n") + "\n" + content)
+bitbucket._session.proxies = {"http": proxy_setting1, "https": proxy_setting2}
 
 
-def write_license():
-    files_arr = []
-    for root, dirs, files in os.walk(path_to, topdown=False):
+############
+# python-git
+username = "dylanrsmith"
+password = "ATBB8QqnhrB3vr8k8aMvq4hrJdUy56EB4A95"
+repo = git.Repo()
+repo_names = []
+staging_spots = []
+final_spots = []
+
+
+def rmtree(top):
+    for root, dirs, files in os.walk(top, topdown=False):
         for name in files:
-            files_arr.append(os.path.join(root, name))
-    for file in files_arr:
-        if file.endswith(".py") or file.endswith(".txt"):  # Filter by file type
-            with open(file, "r+") as f:
-                content = f.read()
-                f.seek(0, 0)
-                # f.write(line.rstrip("\r\n") + "\n" + content)                           # line is content to write
-                f.write("LICENSE#322224222" + "\n" + content)
+            filename = os.path.join(root, name)
+            os.chmod(filename, stat.S_IWRITE)
+            os.remove(filename)
+        for name in dirs:
+            os.rmdir(os.path.join(root, name))
+    try:
+        os.rmdir(top)
+    except FileNotFoundError:
+        pass
+
+
+def change_permission(path):
+    for root, dirs, files in os.walk(path, topdown=False):
+        for name in files:
+            filename = os.path.join(root, name)
+            os.chmod(filename, stat.S_IWRITE)
 
 
 def get_config():
-    """
-    first step
-    """
+    lines = []
+    options = []
+    count = 0
     f = open("config.txt")
-    l = open("license.txt")
-    license = l.read()
     lines = [word for word in f.read().split("\r")]
-    for parameter in lines:
-        options = [word for word in parameter.split()]
-    for i in options:  # Assign config variables
-        print(i)
+    for line in lines:
+        options = [word for word in line.split()]
+    for option in options:
+        count += 1
+        if count == 1:
+            repo_names.append(option)
+        elif count == 2:
+            staging_spots.append(option)
+        elif count == 3:
+            final_spots.append(option)
+            count = 0
 
-    return license
-
-
-def clone_fei_repo():
-    # Clone remote repository from bitbucket
-    repo.clone_from(git_link, path_to)
-
-    # TODO: Open Files and add License Doc to top of each...
-    # Filter by files that contain ".cs" or ".h":
-
-    directory = os.scandir(path_to)
-    entries = [it.name for it in directory]
-    # need_license = [it.name for it in directory if it.endswith(('.cs','.h'))]
-    # need_license = [it.name for it in directory if not it.endswith(".py")]
-    print(entries)
-    # print(need_license)
-
-    # Move cloned repo to network location
-    shutil.move(path_to, new_path)
+    print("REPOS:")
+    print(repo_names)
+    print("STAGES:")
+    print(staging_spots)
+    print("FINALS:")
+    print(final_spots)
+    # END
 
 
+def clone(repo_name, path_to, final_destination):
+    # NOTE: path_to needs to be an empty directory
+    # Delete directory if it exists
+    try:
+        rmtree(path_to)
+        rmtree(final_destination)
+    except FileNotFoundError:
+        print("Stage already empty")
+    # Proxy works for this
+    # NOTE repo_name must belong to fargoengineeringinc workspace
+    git_link = f"https://{username}:{password}@bitbucket.org/fargoengineeringinc/{repo_name}.git"
+    cloned_repo = repo.clone_from(
+        git_link, path_to, config="http.proxy=farft01:fardnc01@proxy-us.cnhind.com:8080"
+    )
+
+    # Append license to correct files
+    with open("license.txt", "r") as l:
+        license = l.read()
+    for root, dirs, files in os.walk(path_to, topdown=True):
+        for file in files:
+            if file.endswith(".cs"):
+                with open(os.path.join(root, file), "r", encoding='utf-8-sig') as f:     
+                    try:
+                        content = f.read()
+                    except UnicodeDecodeError:
+                        continue
+                with open(os.path.join(root, file), "wb") as f:     
+                    f.seek(0, 0)
+                    new_content = (license + "\n\n" + format(content)).encode('utf-8')
+                    f.write(new_content)
+
+    rmtree(final_destination)
+    change_permission(path_to)
+    shutil.move(path_to, final_destination)
+
+
+# Main Function
 if __name__ == "__main__":
-    print("hello")
-    license = get_config()
-    line_prepender(path_to, license)
+    start = datetime.now()
+    get_config()
+
+    for i in range(len(repo_names)):
+        if os.path.exists(final_spots[i]) == False:
+            clone(repo_names[i], staging_spots[i], final_spots[i])
+        else:
+            print("Path already exists: " + final_spots[i])
+
+    end = datetime.now()
+    time = end - start
+    print("DONE @ " + str(time))

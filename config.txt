@@ -1,3 +1,4 @@
-uts2018 C:/Temp/temp \\s1cn1faras14\SharedData\Temp\repo\uts2018
+MODIS C:/Temp/temp \\s1cn1faras14\SharedData\Temp\repo\MODIS
+paho C:/Temp/temp \\s1cn1faras14\SharedData\Temp\repo\paho
 
 

@@ -1,0 +1,2 @@
+GitPython
+atlassian-python-api
