@@ -5,18 +5,10 @@ GITHUB V BITBUCKET
 
 - Open each .cs file and add docstring that contains license information to each file.
 
-	
+- repo_names[] contain list of repos to sync
 
-TODO:
+- staging_spots[] indicate working directory to edit files
 
-- get list of repo git links. - from config file - just about ready
+- final_spots[] indicate end location to upload edited repo files
 
-- download repo to staging location using gitpython - good
-
-- filter by file type and date published - not yet
-
-- prepend license text to compatible files. - good
-
-- move from staging location to network location - good
-
-- UI?
+- triggers[] indicate operation parameters to perform on specified repo
