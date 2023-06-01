@@ -31,22 +31,30 @@ def download_files(remote_folder, local_path):
     for drive_item in drive_items:
         if drive_item.file is not None:  # is file?
             # download file content
-            with open(os.path.join(local_path, drive_item.name), 'wb') as local_file:
-                drive_item.download(local_file).execute_query()     # 404?
-                
+            with open(os.path.join(local_path, drive_item.name), "wb") as local_file:
+                drive_item.download(local_file).execute_query()  # 404?
 
 
 def download_file():
     client = GraphClient(acquire_token_func)
-    # retrieve drive properties 
-    file_item = client.users["dsmith@fargo"].drive.root.get_by_path("Documents/test.xlsx").get().execute_query()
+    # retrieve drive properties
+    file_item = (
+        client.users["dsmith@fargo"]
+        .drive.root.get_by_path("Documents/test.xlsx")
+        .get()
+        .execute_query()
+    )
 
     with tempfile.TemporaryDirectory() as local_path:
-        with open(os.path.join(local_path, file_item.name), 'wb') as local_file:
-            file_item.download_session(local_file, chunk_size=1024*512).execute_query()
-        print("File '{0}' has been downloaded to {1}".format(file_item.name, local_file.name))
-
-
+        with open(os.path.join(local_path, file_item.name), "wb") as local_file:
+            file_item.download_session(
+                local_file, chunk_size=1024 * 512
+            ).execute_query()
+        print(
+            "File '{0}' has been downloaded to {1}".format(
+                file_item.name, local_file.name
+            )
+        )
 
 
 def upload_files(remote_drive, local_root_path):
@@ -85,8 +93,6 @@ def list_drives():
     #     print("\n")
 
 
-
-
 if __name__ == "__main__":
     token = acquire_token_func()
     print(token)
@@ -105,4 +111,3 @@ if __name__ == "__main__":
     list_drives()
 
     download_file()
-

@@ -1,21 +1,16 @@
-"""
-    Still need to try to only overwrite repos in final destination,
-    IF AND ONLY IF they are older than the newly cloned repo.
-"""
 import os
 import git
 import stat
 import shutil
 import json
 import requests
-import webbrowser
 import openpyxl
+import pandas
 from sync_folders import main
 from datetime import datetime
 from atlassian import Bitbucket
 
-# Bitbucket-python
-# TODO read these config variables from a config file
+
 proxy_setting1 = "http://farft01:fardnc01@proxy-us.cnhind.com:8080"
 proxy_setting2 = "https://farft01:fardnc01@proxy-us.cnhind.com:8080"
 basic_auth = ("dylanrsmith", "ATBB8QqnhrB3vr8k8aMvq4hrJdUy56EB4A95")
@@ -32,23 +27,18 @@ bitbucket._session.proxies = {"http": proxy_setting1, "https": proxy_setting2}
 username = "dylanrsmith"
 password = "ATBB8QqnhrB3vr8k8aMvq4hrJdUy56EB4A95"
 repo = git.Repo()
-repo_names = []
-staging_spots = []
-final_spots = []
-triggers = []
+repo_names = []         # repo ID BB
+repo_staging_spots = []
+repo_onedrive_spots = []
+###
+#staging_spots = []      # local_path
+plant_server_spots = []        # server path
+plant_onedrive_spots = []     # onedrive path
+triggers = []           # 'W' or 'X'
+repository = []
 
-# AS OF 5/26/23
-# Seems impossible to achieve onedrive connection without SPO License...
 
-# These credentials will expire 5-17-2025
-# # Dustin's gmail Domain
-# client_id = "609f4e5c-c115-4f8f-af2e-1a2e53b047f9"
-# client_secret = "N1j8Q~G1unW04A4H8U7HGtonMyK2wRB-i9JYscg4"
-# redirect_uri = "http://localhost"
-# tenant = "4866cf07-720e-4873-aa11-cbc6a098c334"
-# user_id = "3437836b-6a0f-4849-9349-416d2dce36da"
-
-# Dylan's fargoengineering Domain
+# fargoengineering domain
 client_id = "5421bf2a-f352-4a3d-a647-0a8ded1e96d7"
 client_secret = "~_C8Q~t8K-gFvszz7r5sRu-IlBWDnJ~Pa2W10aBu"
 tenant = "b982fbe0-f860-4be8-b974-25005ff5aba4"
@@ -70,7 +60,7 @@ def get_access_token(client_id, client_secret, tenant):
 
 
 def download_file_from_onedrive(access_token, onedrive_file_path, local_file_path):
-    download_url = "https://graph.microsoft.com/v1.0/users/{user_id}/drive/items/root:/{0}:/content".format(
+    download_url = "https://graph.microsoft.com/v1.0/users/"+user_id+"/drive/items/root:/{0}:/content".format(
         onedrive_file_path
     )
 
@@ -81,7 +71,7 @@ def download_file_from_onedrive(access_token, onedrive_file_path, local_file_pat
 
     response = requests.get(download_url, headers=headers)
 
-    if response.status_code in (200,201):
+    if response.status_code in (200,201,202,204):
         with open(local_file_path, "wb") as file:
             file.write(response.content)
         print("File downloaded successfully.")
@@ -112,8 +102,12 @@ def rmtree(top):
     for root, dirs, files in os.walk(top, topdown=False):
         for name in files:
             filename = os.path.join(root, name)
-            os.chmod(filename, stat.S_IWRITE)
-            shutil.remove(filename)
+            try:
+                os.chmod(filename, stat.S_IWRITE)
+                os.remove(filename)
+            except PermissionError as e:
+                print("UNABLE TO DELETE FILE: "+filename+"\n Something is locking the file....")
+                print(e.winerror)
         for name in dirs:
             os.rmdir(os.path.join(root, name))
     try:
@@ -129,62 +123,64 @@ def change_permission(path):
             os.chmod(filename, stat.S_IWRITE)
 
 
-def get_config_txt():
-    lines = []
-    options = []
-    count = 0
-    f = open("config.txt")
-    lines = [word for word in f.read().split("\r")]
-    for line in lines:
-        options = [word for word in line.split()]
-    for option in options:
-        count += 1
-        if count == 1:
-            repo_names.append(option)
-        elif count == 2:
-            staging_spots.append(option)
-        elif count == 3:
-            final_spots.append(option)
-            count = 0
-
-    print("REPOS:")
-    print(repo_names)
-    print("STAGES:")
-    print(staging_spots)
-    print("FINALS:")
-    print(final_spots)
-    # END
-
-
 def get_config():
+    access_token = get_access_token(client_id, client_secret, tenant)
+    download_file_from_onedrive(access_token,"Documents/Sync.xlsx","./Config/Sync.xlsx")
     # read excel file
-    wb = openpyxl.load_workbook(".\Sync.xlsx")
-    sheet = wb.active
+    wb = openpyxl.load_workbook(".\Config\Sync.xlsx")
+    plant_sheets = []
+    #sheet = wb.active
+    print(wb.sheetnames)
+    for sheet in wb.sheetnames:
+        if sheet == "BitBucket Repos":
+            repo_sheet = wb[sheet]
+        else:
+            plant_sheets.append(wb[sheet])
 
-    excel_data = []
-    i = 0
-    for row in sheet.iter_rows(values_only=True):
+    # Parse Repository Sheet First:
+    for row in repo_sheet.iter_rows(values_only=True):
         row_data = []
 
         for cell in row:
             row_data.append(cell)
 
-        if row_data[0] != "Source" and row_data[0] != None:
-            staging_spots.append(row_data[0])
-        if row_data[1] != "Destination" and row_data[1] != None:
-            final_spots.append(row_data[1])
-        if row_data[2] != "Trigger" and row_data[2] != None:
-            triggers.append(row_data[2])
-        if row_data[3] != "Repository" and row_data[3] != None:
-            repo_names.append(row_data[3])
+        if row_data[0] != "Name" and row_data[0] != None:
+            repo_names.append(row_data[0])
+        if row_data[1] != "Local Path" and row_data[1] != None:
+            repo_staging_spots.append(row_data[1])
+        if row_data[2] != "Destination Path" and row_data[2] != None:
+            repo_onedrive_spots.append(row_data[2])        
+
+    # Parse Each Plant Sheet Next:
+    for sheet in plant_sheets:
+        for row in sheet.iter_rows(values_only=True):
+            row_data = []
+
+            for cell in row:
+                row_data.append(cell)
+
+            if row_data[0] != "Source" and row_data[0] != None:
+                plant_onedrive_spots.append(row_data[0])
+            if row_data[1] != "Destination" and row_data[1] != None:
+                plant_server_spots.append(row_data[1])
+            if row_data[2] != "Trigger":
+                triggers.append(row_data[2])
+            if row_data[3] != "Repository":
+                repository.append(row_data[3])
+
+    df = pandas.read_excel('./Config/Sync.xlsx')
+    df.replace('X','',inplace=True)
+    df.to_excel('./Config/Sync.xlsx',index=False)
+    
+    upload_folder_to_onedrive(access_token,"./Config/Sync.xlsx", "FEI_SHARED/Repository/Sync.xlsx")
 
 
-def clone(repo_name, path_to, final_destination):
+def repo_sync(repo_name, path_to, final_destination):
     # NOTE: path_to needs to be an empty directory
     # Delete directory if it exists
     try:
         rmtree(path_to)
-        rmtree(final_destination)
+        #rmtree(final_destination)
     except FileNotFoundError:
         print("Stage already empty")
 
@@ -201,25 +197,25 @@ def clone(repo_name, path_to, final_destination):
         license = l.read()
     for root, dirs, files in os.walk(path_to, topdown=True):
         for file in files:
-            if file.endswith(".cs"):
+            if file.endswith(".cs") or file.endswith(".ino") or file.endswith(".h"): 
                 with open(os.path.join(root, file), "r", encoding="utf-8-sig") as f:
                     try:
                         content = f.read()
-                    except UnicodeDecodeError:
-                        continue
+                    except UnicodeDecodeError as e:
+                        print("ADD LICENSE: Unable to parse target file: "+e)
                 with open(os.path.join(root, file), "wb") as f:
                     f.seek(0, 0)
                     new_content = (license + "\n\n" + format(content)).encode("utf-8")
                     f.write(new_content)
 
-    rmtree(final_destination)
+    #rmtree(final_destination)
     rmtree(path_to + "\\.git")
     change_permission(path_to)
     access_token = get_access_token(client_id, client_secret, tenant)
     upload_folder_to_onedrive(
         access_token,
         path_to,
-        "Documents",
+        "Documents/"+repo_name,
     )
     # shutil.move(path_to, final_destination)
     # main.sync(path_to, final_destination)
@@ -229,13 +225,15 @@ def clone(repo_name, path_to, final_destination):
 if __name__ == "__main__":
     start = datetime.now()
     get_config()
+    print("CONFIG MODIFIED SUCCESFULLY")
+
 
     for i in range(len(repo_names)):
-        rmtree(final_spots[i])
-        if os.path.exists(final_spots[i]) == False:
-            clone(repo_names[i], staging_spots[i], final_spots[i])
-        else:
-            print("Path already exists: " + final_spots[i])
+        # rmtree(final_spots[i])
+        # if os.path.exists(final_spots[i]) == False:
+        repo_sync(repo_names[i], repo_staging_spots[i], repo_onedrive_spots[i])         # Will sync bitbucket and onedrive repos, but not additional schematics etc..
+        # else:
+            # print("Path already exists: " + final_spots[i])
 
     end = datetime.now()
     time = end - start

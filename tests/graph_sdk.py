@@ -44,7 +44,9 @@ async def get_drives():
 
 async def get_drive_items():
     try:
-        items = await client.drives.by_drive_id('b!NvwQaCejzEq_SqSblwsxEuqeMUYiFCdHmL6zxaqZyBQR7AVjz3K7Rahkq_koagVu').items.get(filter="size gt 0")
+        items = await client.drives.by_drive_id(
+            "b!NvwQaCejzEq_SqSblwsxEuqeMUYiFCdHmL6zxaqZyBQR7AVjz3K7Rahkq_koagVu"
+        ).items.get(filter="size gt 0")
         if items and items.value:
             for item in items.value:
                 print(item.id, item.name, item.size, item.folder, item.file)
@@ -53,6 +55,6 @@ async def get_drive_items():
         print(e.error.message)
 
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
     asyncio.run(get_drive_items())
-    #asyncio.run(get_drives())
+    # asyncio.run(get_drives())
