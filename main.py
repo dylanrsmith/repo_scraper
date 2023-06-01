@@ -113,7 +113,7 @@ def rmtree(top):
         for name in files:
             filename = os.path.join(root, name)
             os.chmod(filename, stat.S_IWRITE)
-            os.remove(filename)
+            shutil.remove(filename)
         for name in dirs:
             os.rmdir(os.path.join(root, name))
     try:
