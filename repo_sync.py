@@ -1,11 +1,11 @@
 import os
 import git
 import stat
-import shutil
 import json
 import requests
 import openpyxl
 import pandas
+from time import sleep
 from sync_folders import main
 from datetime import datetime
 from atlassian import Bitbucket
@@ -22,28 +22,25 @@ bitbucket = Bitbucket(
 bitbucket._session.proxies = {"http": proxy_setting1, "https": proxy_setting2}
 
 
-############
 # python-git
 username = "dylanrsmith"
 password = "ATBB8QqnhrB3vr8k8aMvq4hrJdUy56EB4A95"
 repo = git.Repo()
-repo_names = []         # repo ID BB
+repo_names = []  # repo ID BB
 repo_staging_spots = []
 repo_onedrive_spots = []
-###
-#staging_spots = []      # local_path
-plant_server_spots = []        # server path
-plant_onedrive_spots = []     # onedrive path
-triggers = []           # 'W' or 'X'
+plant_server_spots = []  # server path
+plant_onedrive_spots = []  # onedrive path
+triggers = []  # 'W' or 'X'
 repository = []
 
 
-# fargoengineering domain
+# fargoengineering domain - Azure Active Directory
 client_id = "5421bf2a-f352-4a3d-a647-0a8ded1e96d7"
 client_secret = "~_C8Q~t8K-gFvszz7r5sRu-IlBWDnJ~Pa2W10aBu"
 tenant = "b982fbe0-f860-4be8-b974-25005ff5aba4"
 redirect_uri = "http://localhost:8080"
-user_id = "dsmith@fargoengineering.com"
+user_id = "Admin@fargoengineering.com"
 
 
 def get_access_token(client_id, client_secret, tenant):
@@ -59,10 +56,29 @@ def get_access_token(client_id, client_secret, tenant):
     return access_token
 
 
+def get_folder_id(access_token, folder_path):
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+    }
+
+    get_folder_url = f"https://graph.microsoft.com/v1.0/users/{user_id}/drive/root:/{folder_path}"  # root:/FEI_SHARED/Repository will return Repository's ID
+
+    response = requests.get(get_folder_url, headers=headers)
+
+    if response.status_code == 200:
+        print(f"Folder {folder_path} is found successfully")
+        return response.json()["id"]
+    else:
+        print(
+            f"Failed to find folder {folder_path}, status code: {response.status_code}"
+        )
+        if response.content:
+            print(f"Error message: {response.json()}")
+        return None
+
+
 def download_file_from_onedrive(access_token, onedrive_file_path, local_file_path):
-    download_url = "https://graph.microsoft.com/v1.0/users/"+user_id+"/drive/items/root:/{0}:/content".format(
-        onedrive_file_path
-    )
+    download_url = f"https://graph.microsoft.com/v1.0/users/Admin@fargoengineering.com/drive/items/root:/{onedrive_file_path}:/content"
 
     headers = {
         "Content-Type": "application/json",
@@ -71,7 +87,7 @@ def download_file_from_onedrive(access_token, onedrive_file_path, local_file_pat
 
     response = requests.get(download_url, headers=headers)
 
-    if response.status_code in (200,201,202,204):
+    if response.status_code in (200, 201, 202, 204):
         with open(local_file_path, "wb") as file:
             file.write(response.content)
         print("File downloaded successfully.")
@@ -79,23 +95,73 @@ def download_file_from_onedrive(access_token, onedrive_file_path, local_file_pat
         print("Error downloading file:", response.content)
 
 
-def upload_folder_to_onedrive(access_token, local_folder_path, onedrive_folder_path):
-    for root, dirs, files in os.walk(local_folder_path):
-        for file in files:
-            local_file_path = os.path.join(root, file)
-            relative_path = os.path.relpath(local_file_path, local_folder_path)
-            onedrive_file_path = onedrive_folder_path + "/" + relative_path
-            upload_url = f"https://graph.microsoft.com/v1.0/users/{user_id}/drive/items/root:/{onedrive_file_path}:/content"
-            headers = {
-                "Content-Type": "text/plain",
-                "Authorization": "Bearer " + access_token,
-            }
-            with open(local_file_path, "rb") as file:
-                response = requests.put(upload_url, headers=headers, data=file)
-                if response.status_code in (200,201,202,204):
-                    print(f"File {local_file_path} uploaded successfully.")
-                else:
-                    print(f"Error uploading file {local_file_path}:", response.content)         #item not found?
+def upload_file_to_onedrive(access_token, folder_id, file_path):
+    headers = {"Authorization": "Bearer " + access_token}
+    file_name = os.path.basename(file_path)
+    file_content = open(file_path, "rb").read()
+
+    upload_url = f"https://graph.microsoft.com/v1.0/users/{user_id}/drive/items/{folder_id}:/{file_name}:/content"
+    response = requests.put(upload_url, headers=headers, data=file_content)
+
+    if response.status_code == 201:
+        print(f"File {file_name} is uploaded successfully")
+        return json.loads(response.content)
+    else:
+        print(f"Failed to upload file {file_name}, status code: {response.status_code}")
+        return None
+
+
+def create_folder_in_onedrive(access_token, parent_id, folder_name):
+    headers = {
+        "Authorization": "Bearer " + access_token,
+        "Content-Type": "application/json",
+    }
+
+    create_folder_url = f"https://graph.microsoft.com/v1.0/users/{user_id}/drive/items/{parent_id}/children"
+
+    folder_metadata = {
+        "name": folder_name,
+        "folder": {},
+        "@microsoft.graph.conflictBehavior": "rename",
+    }
+
+    response = requests.post(create_folder_url, headers=headers, json=folder_metadata)
+
+    if response.status_code == 201:
+        print(f"Folder {folder_name} is created successfully")
+        return json.loads(response.content)
+    else:
+        print(
+            f"Failed to create folder {folder_name}, status code: {response.status_code}"
+        )
+        return None
+
+
+def upload_folder_to_onedrive(access_token, local_folder_path, parent_folder_id):
+    # Create the folder in OneDrive
+    if len(parent_folder_id) < 20:
+        parent_folder_id = get_folder_id(
+            access_token, "FEI_SHARED/Repository/Bitbucket Repos"
+        )
+
+    folder_name = os.path.basename(local_folder_path)
+    folder_metadata = create_folder_in_onedrive(
+        access_token, parent_folder_id, folder_name
+    )
+
+    if folder_metadata is None:
+        print("Failed to create folder, skipping this folder")
+        return
+
+    folder_id = folder_metadata["id"]
+
+    # Upload files in the folder recursively
+    for item in os.listdir(local_folder_path):
+        item_path = os.path.join(local_folder_path, item)
+        if os.path.isfile(item_path):
+            upload_file_to_onedrive(access_token, folder_id, item_path)
+        elif os.path.isdir(item_path):
+            upload_folder_to_onedrive(access_token, item_path, folder_id)
 
 
 def rmtree(top):
@@ -106,7 +172,11 @@ def rmtree(top):
                 os.chmod(filename, stat.S_IWRITE)
                 os.remove(filename)
             except PermissionError as e:
-                print("UNABLE TO DELETE FILE: "+filename+"\n Something is locking the file....")
+                print(
+                    "UNABLE TO DELETE FILE: "
+                    + filename
+                    + "\n Something is locking the file...."
+                )
                 print(e.winerror)
         for name in dirs:
             os.rmdir(os.path.join(root, name))
@@ -123,16 +193,17 @@ def change_permission(path):
             os.chmod(filename, stat.S_IWRITE)
 
 
-def get_config():
-    access_token = get_access_token(client_id, client_secret, tenant)
-    download_file_from_onedrive(access_token,"Documents/Sync.xlsx","./Config/Sync.xlsx")
+def parse_excel():
     # read excel file
     wb = openpyxl.load_workbook(".\Config\Sync.xlsx")
     plant_sheets = []
-    #sheet = wb.active
+    #
+    # sheet = wb.active
     print(wb.sheetnames)
     for sheet in wb.sheetnames:
         if sheet == "BitBucket Repos":
+            repo_sheet = wb[sheet]
+        elif sheet == "Sheet1":
             repo_sheet = wb[sheet]
         else:
             plant_sheets.append(wb[sheet])
@@ -149,7 +220,7 @@ def get_config():
         if row_data[1] != "Local Path" and row_data[1] != None:
             repo_staging_spots.append(row_data[1])
         if row_data[2] != "Destination Path" and row_data[2] != None:
-            repo_onedrive_spots.append(row_data[2])        
+            repo_onedrive_spots.append(row_data[2])
 
     # Parse Each Plant Sheet Next:
     for sheet in plant_sheets:
@@ -168,19 +239,37 @@ def get_config():
             if row_data[3] != "Repository":
                 repository.append(row_data[3])
 
-    df = pandas.read_excel('./Config/Sync.xlsx')
-    df.replace('X','',inplace=True)
-    df.to_excel('./Config/Sync.xlsx',index=False)
-    
-    upload_folder_to_onedrive(access_token,"./Config/Sync.xlsx", "FEI_SHARED/Repository/Sync.xlsx")
+
+def get_config(sync):
+    # Sync is a bool that determines if we want to upload/download the xl.
+
+    if sync:
+        try:
+            print(os.listdir(".\Config"))
+            os.remove(".\Config\Sync.xlsx")
+        except FileNotFoundError:
+            print("gtting config file...")
+        access_token = get_access_token(client_id, client_secret, tenant)
+        download_file_from_onedrive(
+            access_token, "FEI_SHARED/Repository/Sync.xlsx", ".\Config\Sync.xlsx"
+        )
+        sleep(5)
+
+    parse_excel()
+
+    if sync:
+        sleep(5)
+        upload_file_to_onedrive(
+            access_token, "./Config/Sync.xlsx", "FEI_SHARED/Repository"
+        )
 
 
-def repo_sync(repo_name, path_to, final_destination):
+def repo_sync(repo_name, path_to, final_destination, server_location):
     # NOTE: path_to needs to be an empty directory
     # Delete directory if it exists
     try:
         rmtree(path_to)
-        #rmtree(final_destination)
+        # rmtree(final_destination)
     except FileNotFoundError:
         print("Stage already empty")
 
@@ -197,43 +286,49 @@ def repo_sync(repo_name, path_to, final_destination):
         license = l.read()
     for root, dirs, files in os.walk(path_to, topdown=True):
         for file in files:
-            if file.endswith(".cs") or file.endswith(".ino") or file.endswith(".h"): 
-                with open(os.path.join(root, file), "r", encoding="utf-8-sig") as f:
-                    try:
+            if file.endswith(".cs") or file.endswith(".ino") or file.endswith(".h"):
+                try:
+                    with open(os.path.join(root, file), "r", encoding="utf-8-sig") as f:
                         content = f.read()
-                    except UnicodeDecodeError as e:
-                        print("ADD LICENSE: Unable to parse target file: "+e)
-                with open(os.path.join(root, file), "wb") as f:
-                    f.seek(0, 0)
-                    new_content = (license + "\n\n" + format(content)).encode("utf-8")
-                    f.write(new_content)
+                    with open(os.path.join(root, file), "wb") as f:
+                        f.seek(0, 0)
+                        new_content = (license + "\n\n" + format(content)).encode(
+                            "utf-8"
+                        )
+                        f.write(new_content)
+                except UnicodeDecodeError as e:
+                    print("ADD LICENSE: Unable to parse target file: " + str(e))
 
-    #rmtree(final_destination)
+    # rmtree(final_destination)
     rmtree(path_to + "\\.git")
     change_permission(path_to)
     access_token = get_access_token(client_id, client_secret, tenant)
     upload_folder_to_onedrive(
         access_token,
         path_to,
-        "Documents/"+repo_name,
+        repo_name,
     )
-    # shutil.move(path_to, final_destination)
-    # main.sync(path_to, final_destination)
+
+    # Download other Plant folder from onedrive to path_to, then sync to server, right?
+    # ...
+
+    # SYNC WITH SERVER LOCATIONS
+    main.sync(path_to, server_location)
 
 
 # Main Function
 if __name__ == "__main__":
     start = datetime.now()
-    get_config()
+    get_config(False)
     print("CONFIG MODIFIED SUCCESFULLY")
 
-
     for i in range(len(repo_names)):
-        # rmtree(final_spots[i])
-        # if os.path.exists(final_spots[i]) == False:
-        repo_sync(repo_names[i], repo_staging_spots[i], repo_onedrive_spots[i])         # Will sync bitbucket and onedrive repos, but not additional schematics etc..
-        # else:
-            # print("Path already exists: " + final_spots[i])
+        repo_sync(
+            repo_names[i],
+            repo_staging_spots[i],
+            repo_onedrive_spots[i],
+            plant_server_spots[i],
+        )  # Will sync bitbucket and onedrive repos, but not additional schematics etc..
 
     end = datetime.now()
     time = end - start
