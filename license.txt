@@ -1,9 +1,9 @@
-//This is a placeholder for the Software License Agreement (SLA). Upon completion, the actual SLA will detail the rights and restrictions that pertain to the use of this software product.
+// This is a placeholder for the Software License Agreement (SLA). Upon completion, the actual SLA will detail the rights and restrictions that pertain to the use of this software product.
 
-//This license agreement will clearly outline the scope of permissions granted to the end-user. The licensee will be granted rights to install, use, access, display, run, or otherwise interact with the software product. The agreement will specify any limitations on the number of devices onto which the software can be installed or the number of users that can use the software concurrently.
+// This license agreement will clearly outline the scope of permissions granted to the end-user. The licensee will be granted rights to install, use, access, display, run, or otherwise interact with the software product. The agreement will specify any limitations on the number of devices onto which the software can be installed or the number of users that can use the software concurrently.
 
-//The SLA will also specify the licensee's rights with regard to modifying, redistributing, or creating derivative works from the software. It will describe any warranties provided with the software, and any disclaimers of warranty.
+// The SLA will also specify the licensee's rights with regard to modifying, redistributing, or creating derivative works from the software. It will describe any warranties provided with the software, and any disclaimers of warranty.
 
-//The agreement will detail terms and conditions about termination of the agreement, what will happen in case of violation of the agreement, and whether any updates or upgrades will be provided, and under what terms.
+// The agreement will detail terms and conditions about termination of the agreement, what will happen in case of violation of the agreement, and whether any updates or upgrades will be provided, and under what terms.
 
-//This placeholder text should be replaced with the actual Software License Agreement content before the software product is distributed.
+// Fargo Engineering Inc.

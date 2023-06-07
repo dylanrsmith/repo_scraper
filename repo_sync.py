@@ -4,9 +4,9 @@ import stat
 import json
 import requests
 import openpyxl
+import shutil
 import pandas
 from time import sleep
-from sync_folders import main
 from datetime import datetime
 from atlassian import Bitbucket
 
@@ -61,7 +61,9 @@ def get_folder_id(access_token, folder_path):
         "Authorization": f"Bearer {access_token}",
     }
 
-    get_folder_url = f"https://graph.microsoft.com/v1.0/users/{user_id}/drive/root:/{folder_path}"  # root:/FEI_SHARED/Repository will return Repository's ID
+    get_folder_url = (
+        f"https://graph.microsoft.com/v1.0/users/{user_id}/drive/root:/{folder_path}"
+    )
 
     response = requests.get(get_folder_url, headers=headers)
 
@@ -75,6 +77,39 @@ def get_folder_id(access_token, folder_path):
         if response.content:
             print(f"Error message: {response.json()}")
         return None
+
+
+def download_folder_from_onedrive(
+    access_token, onedrive_folder_path, local_folder_path
+):
+    get_children_url = f"https://graph.microsoft.com/v1.0/users/Admin@fargoengineering.com/drive/items/root:/{onedrive_folder_path}:/children"
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + access_token,
+    }
+
+    response = requests.get(get_children_url, headers=headers)
+
+    if response.status_code in [200, 201, 202]:
+        children = response.json()["value"]  # List of all children of the folder
+
+        if not os.path.exists(local_folder_path):
+            os.makedirs(
+                local_folder_path
+            )  # Create the local directory if it doesn't exist
+
+        for child in children:
+            if "folder" not in child:  # If the child is a file
+                onedrive_file_path = f"{onedrive_folder_path}/{child['name']}"
+                local_file_path = f"{local_folder_path}/{child['name']}"
+                download_file_from_onedrive(
+                    access_token, onedrive_file_path, local_file_path
+                )
+    else:
+        print(
+            f"Error while trying to get list of children, status code: {response.status_code}"
+        )
 
 
 def download_file_from_onedrive(access_token, onedrive_file_path, local_file_path):
@@ -103,12 +138,19 @@ def upload_file_to_onedrive(access_token, folder_id, file_path):
     upload_url = f"https://graph.microsoft.com/v1.0/users/{user_id}/drive/items/{folder_id}:/{file_name}:/content"
     response = requests.put(upload_url, headers=headers, data=file_content)
 
-    if response.status_code == 201:
+    if response.status_code in [200, 201, 202, 203]:
         print(f"File {file_name} is uploaded successfully")
         return json.loads(response.content)
     else:
         print(f"Failed to upload file {file_name}, status code: {response.status_code}")
         return None
+
+
+def folder_exists_in_response(response, folder_name):
+    for item in response.json()["value"]:
+        if item["name"] == folder_name and item["folder"]:
+            return True
+    return False
 
 
 def create_folder_in_onedrive(access_token, parent_id, folder_name):
@@ -119,6 +161,26 @@ def create_folder_in_onedrive(access_token, parent_id, folder_name):
 
     create_folder_url = f"https://graph.microsoft.com/v1.0/users/{user_id}/drive/items/{parent_id}/children"
 
+    response = requests.get(
+        create_folder_url, headers=headers
+    )  # Check if folder exists
+
+    if response.status_code == 200:
+        folders = response.json()["value"]  # List of all child folders
+        if any(
+            folder["name"] == folder_name for folder in folders
+        ):  # Check if desired folder exists in the list
+            print(f"Folder {folder_name} already exists.")
+            return [folder for folder in folders if folder["name"] == folder_name][
+                0
+            ]  # return the folder's details
+    else:
+        print(
+            f"Error while trying to get list of folders, status code: {response.status_code}"
+        )
+        return None
+
+    # If we reach here, it means the folder doesn't exist. So, let's create it
     folder_metadata = {
         "name": folder_name,
         "folder": {},
@@ -129,7 +191,7 @@ def create_folder_in_onedrive(access_token, parent_id, folder_name):
 
     if response.status_code == 201:
         print(f"Folder {folder_name} is created successfully")
-        return json.loads(response.content)
+        return response.json()
     else:
         print(
             f"Failed to create folder {folder_name}, status code: {response.status_code}"
@@ -153,7 +215,7 @@ def upload_folder_to_onedrive(access_token, local_folder_path, parent_folder_id)
         print("Failed to create folder, skipping this folder")
         return
 
-    folder_id = folder_metadata["id"]
+    folder_id = folder_metadata.get("id")
 
     # Upload files in the folder recursively
     for item in os.listdir(local_folder_path):
@@ -240,28 +302,31 @@ def parse_excel():
                 repository.append(row_data[3])
 
 
-def get_config(sync):
-    # Sync is a bool that determines if we want to upload/download the xl.
-
-    if sync:
-        try:
-            print(os.listdir(".\Config"))
-            os.remove(".\Config\Sync.xlsx")
-        except FileNotFoundError:
-            print("gtting config file...")
-        access_token = get_access_token(client_id, client_secret, tenant)
-        download_file_from_onedrive(
-            access_token, "FEI_SHARED/Repository/Sync.xlsx", ".\Config\Sync.xlsx"
-        )
-        sleep(5)
-
+def get_config():
+    try:
+        print(os.listdir(".\Config"))
+        os.remove(".\Config\Sync.xlsx")
+    except FileNotFoundError:
+        print("getting config file...")
+    access_token = get_access_token(client_id, client_secret, tenant)
+    download_file_from_onedrive(
+        access_token, "FEI_SHARED/Repository/Sync.xlsx", ".\Config\Sync.xlsx"
+    )
     parse_excel()
 
-    if sync:
-        sleep(5)
-        upload_file_to_onedrive(
-            access_token, "./Config/Sync.xlsx", "FEI_SHARED/Repository"
-        )
+
+def set_config():
+    # Edit Excel and remove 'X' triggers
+    wb = openpyxl.load_workbook("./Config/Sync.xlsx")
+    for sheet in wb.sheetnames:
+        for row in sheet:
+            for cell in row:
+                if cell.value == "X":
+                    cell.value = ""
+
+    access_token = get_access_token(client_id, client_secret, tenant)
+
+    upload_file_to_onedrive(access_token, "./Config/Sync.xlsx", "FEI_SHARED/Repository")
 
 
 def repo_sync(repo_name, path_to, final_destination, server_location):
@@ -277,7 +342,7 @@ def repo_sync(repo_name, path_to, final_destination, server_location):
     # NOTE repo_name must belong to fargoengineeringinc workspace
     git_link = f"https://{username}:{password}@bitbucket.org/fargoengineeringinc/{repo_name}.git"
 
-    cloned_repo = repo.clone_from(
+    repo.clone_from(
         git_link, path_to, config="http.proxy=farft01:fardnc01@proxy-us.cnhind.com:8080"
     )
 
@@ -309,11 +374,19 @@ def repo_sync(repo_name, path_to, final_destination, server_location):
         repo_name,
     )
 
-    # Download other Plant folder from onedrive to path_to, then sync to server, right?
-    # ...
 
-    # SYNC WITH SERVER LOCATIONS
-    main.sync(path_to, server_location)
+def server_sync(path_to, server_location, onedrive_folder):
+    # Download OneDrive Folders specified in Excel
+    # Depending on Trigger,
+    # Move downloaded folders to server locations specified in excel.
+    # Update Excel Triggers when complete
+    print("Syncing to Server: ")
+
+    access_token = get_access_token(client_id, client_secret, tenant)
+
+    download_folder_from_onedrive(access_token, onedrive_folder, path_to)
+
+    shutil.move(path_to, server_location)
 
 
 # Main Function
@@ -323,13 +396,27 @@ if __name__ == "__main__":
     print("CONFIG MODIFIED SUCCESFULLY")
 
     for i in range(len(repo_names)):
-        repo_sync(
-            repo_names[i],
-            repo_staging_spots[i],
-            repo_onedrive_spots[i],
-            plant_server_spots[i],
-        )  # Will sync bitbucket and onedrive repos, but not additional schematics etc..
+        if triggers[i] in ["W", "X"]:
+            repo_sync(
+                repo_names[i],
+                repo_staging_spots[i],
+                repo_onedrive_spots[i],
+                plant_server_spots[
+                    i
+                ],  # Plant Sheet must have same num of rows as Repo Sheet
+            )
 
+            server_sync(
+                repo_staging_spots[i], plant_server_spots[i], plant_onedrive_spots[i]
+            )
+
+            # if 'X' edit excel before we reupload it
+        else:
+            print(
+                f"Ignoring Repo: {repo_names[i]} and server {plant_server_spots[i]} remains untouched"
+            )
+
+    set_config()
     end = datetime.now()
     time = end - start
     print("DONE @ " + str(time))

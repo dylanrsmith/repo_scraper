@@ -1,1 +1,3 @@
-Create teststststst.txt in D:\Dylan\2023\May\test\testb
+Change .gitattributes in \\s1cn1faras14\SharedData\Temp\repo\UTS
+Change .gitignore in \\s1cn1faras14\SharedData\Temp\repo\UTS
+Create xututs2018.sln in \\s1cn1faras14\SharedData\Temp\repo\UTS
