@@ -27,8 +27,8 @@ username = "dylanrsmith"
 password = "ATBB8QqnhrB3vr8k8aMvq4hrJdUy56EB4A95"
 repo = git.Repo()
 repo_names = []  # repo ID BB
-repo_staging_spots = []
-repo_onedrive_spots = []
+repo_staging_spots = []  # Local Download Path
+repo_onedrive_spots = []  # OneDrive Repo Upload Path
 plant_server_spots = []  # server path
 plant_onedrive_spots = []  # onedrive path
 triggers = []  # 'W' or 'X'
@@ -259,7 +259,7 @@ def parse_excel():
     # read excel file
     wb = openpyxl.load_workbook(".\Config\Sync.xlsx")
     plant_sheets = []
-    #
+
     # sheet = wb.active
     print(wb.sheetnames)
     for sheet in wb.sheetnames:
@@ -304,7 +304,6 @@ def parse_excel():
 
 def get_config():
     try:
-        print(os.listdir(".\Config"))
         os.remove(".\Config\Sync.xlsx")
     except FileNotFoundError:
         print("getting config file...")
@@ -312,24 +311,28 @@ def get_config():
     download_file_from_onedrive(
         access_token, "FEI_SHARED/Repository/Sync.xlsx", ".\Config\Sync.xlsx"
     )
+    sleep(3)
     parse_excel()
 
 
+# TODO TEST THIS FUNCTION:
 def set_config():
     # Edit Excel and remove 'X' triggers
     wb = openpyxl.load_workbook("./Config/Sync.xlsx")
-    for sheet in wb.sheetnames:
+    for sheet_name in wb.sheetnames:
+        sheet = wb[sheet_name]
         for row in sheet:
             for cell in row:
                 if cell.value == "X":
                     cell.value = ""
 
+    wb.save("./Config/Sync.xlsx")
     access_token = get_access_token(client_id, client_secret, tenant)
+    folder_id = get_folder_id(access_token, "FEI_SHARED/Repository")
+    upload_file_to_onedrive(access_token, folder_id, "./Config/Sync.xlsx")
 
-    upload_file_to_onedrive(access_token, "./Config/Sync.xlsx", "FEI_SHARED/Repository")
 
-
-def repo_sync(repo_name, path_to, final_destination, server_location):
+def repo_sync(repo_name, path_to):
     # NOTE: path_to needs to be an empty directory
     # Delete directory if it exists
     try:
@@ -375,48 +378,49 @@ def repo_sync(repo_name, path_to, final_destination, server_location):
     )
 
 
-def server_sync(path_to, server_location, onedrive_folder):
+def server_sync(server_location, onedrive_folder):
     # Download OneDrive Folders specified in Excel
     # Depending on Trigger,
     # Move downloaded folders to server locations specified in excel.
     # Update Excel Triggers when complete
     print("Syncing to Server: ")
 
+    path_to = "C:\\Temp\\Sync\\Docs"
+
     access_token = get_access_token(client_id, client_secret, tenant)
 
     download_folder_from_onedrive(access_token, onedrive_folder, path_to)
 
-    shutil.move(path_to, server_location)
+    rmtree(server_location)
+    try:
+        shutil.move(path_to, server_location)
+    except Exception as e:
+        print(e)
 
 
 # Main Function
 if __name__ == "__main__":
     start = datetime.now()
-    get_config(False)
-    print("CONFIG MODIFIED SUCCESFULLY")
+    get_config()
+
+    print("CONFIGURATION RECEIVED")
 
     for i in range(len(repo_names)):
         if triggers[i] in ["W", "X"]:
-            repo_sync(
-                repo_names[i],
-                repo_staging_spots[i],
-                repo_onedrive_spots[i],
-                plant_server_spots[
-                    i
-                ],  # Plant Sheet must have same num of rows as Repo Sheet
-            )
-
-            server_sync(
-                repo_staging_spots[i], plant_server_spots[i], plant_onedrive_spots[i]
-            )
-
-            # if 'X' edit excel before we reupload it
+            repo_sync(repo_names[i], f"{repo_staging_spots[i]}\\{repo_names[i]}")
         else:
-            print(
-                f"Ignoring Repo: {repo_names[i]} and server {plant_server_spots[i]} remains untouched"
-            )
+            print(f"Ignoring Repo: {repo_names[i]}")
 
+    # NEED TO MAKE THIS UNIQUE FOR EACH PLANT LOCATION/SHEET
+    for i in range(len(plant_server_spots)):
+        if triggers[i] in ["W", "X"]:
+            server_sync(plant_server_spots[i], plant_onedrive_spots[i])
+        else:
+            print(f"Ignoring server path: {plant_server_spots[i]}")
+
+    # if 'X' edit excel before we reupload it
     set_config()
+
     end = datetime.now()
     time = end - start
     print("DONE @ " + str(time))
